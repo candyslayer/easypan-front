@@ -2,31 +2,23 @@
     <div class="app-framework">
         <div class="app-header">
             <!-- TopMenu 内容 -->
-            <div class="nav-bar"  v-if="navShow">
+            <div class="nav-bar" v-if="navShow">
                 <div class="user-switch">
-                    <ElDropdown>
-                        <span class="user-role">管理员
-                            <ElIcon>
-                                <ArrowDown />
-                            </ElIcon>
-                        </span>
-                        <template #dropdown>
-                            <ElDropdownMenu>
-                                <ElDropdownItem>
-                                    <span class="user-role">切换到用户</span>
-                                </ElDropdownItem>
-                            </ElDropdownMenu>
-                        </template>
-                    </ElDropdown>
+                    <span v-if="userInfo.isAdmin" class="user-role is-admin">
+                        <span class="dripicons-shield" style="margin-right: 4px;"></span>管理员
+                    </span>
+                    <span v-else class="user-role">
+                        EasyPan 网盘
+                    </span>
                 </div>
 
                 <div class="profile-section">
-                    <div class="upload-icon">
-                        <div class="network-icon"><span class="dripicons-network-2"></span></div>
+                    <div class="upload-icon" @click="router.push('/transfer')">
+                        <div class="network-icon" title="传输列表"><span class="dripicons-network-2"></span></div>
                     </div>
 
-                    <div>
-                        <Avatar :user-id="proxy.vueCookies.get('userInfo').userId" :size="35"></Avatar>
+                    <div @click="router.push('/user')" style="cursor: pointer;">
+                        <Avatar :user-id="userInfo.userId" :size="35"></Avatar>
                     </div>
                 </div>
             </div>
@@ -40,7 +32,9 @@
         <div class="content-section">
             <Transfer v-show="isTransferShow" ref="transferInstance"></Transfer>
             <router-view v-slot="{Component}">
-                <component v-if="!isTransferRoute" :is="Component" ref="routerViewRef" @addFile="addFile"></component>
+                <transition name="fade-slide" mode="out-in">
+                    <component v-if="!isTransferRoute" :is="Component" ref="routerViewRef" @addFile="addFile"></component>
+                </transition>
             </router-view>
         </div>
 
@@ -61,27 +55,25 @@
 </template>
 
 <script setup>
-import { computed, getCurrentInstance, provide, ref } from 'vue';
+import { computed, getCurrentInstance, provide, ref, watch } from 'vue';
 import { ElDropdown, ElDropdownItem, ElDropdownMenu, ElIcon, ElTabs, ElTabPane } from 'element-plus';
 import { ArrowDown } from '@element-plus/icons-vue';
 import Avatar from '../components/Avatar.vue';
 import FileMenu from '../components/FileMenu.vue';
 import Transfer from './transfer/Transfer.vue';
-import { useRouter,useRoute,RouterView } from 'vue-router';
+import { useRouter, useRoute, RouterView } from 'vue-router';
 
 const { proxy } = getCurrentInstance()
 const router = useRouter();
 const route = useRoute();
 
 const routerViewRef = ref()
-
 const transferInstance = ref(null)
+
+const userInfo = computed(() => proxy.vueCookies.get('userInfo') || {})
 
 const addFile = (data) => {
     const { file, filePid } = data;
-
-    console.log(transferInstance.value)
-
     transferInstance.value.addFile(file, filePid)
 }
 
@@ -94,23 +86,44 @@ const tabConfig = [
     { label: '用户', name: 'user', icon: 'dripicons-user', path: '/main/user' }
 ];
 
-const navShow=ref(true)
+const navShow = ref(true)
+
+watch(
+    () => route.path,
+    (newPath) => {
+        if (newPath.includes('user')) {
+            activePick.value = 'user'
+            navShow.value = false
+        } else if (newPath.includes('recycle')) {
+            activePick.value = 'recycle'
+            navShow.value = true
+        } else if (newPath.includes('share') || newPath.includes('myshare')) {
+            activePick.value = 'myshare'
+            navShow.value = true
+        } else if (newPath.includes('transfer')) {
+            activePick.value = 'transfer'
+            navShow.value = true
+        } else if (newPath.includes('main')) {
+            activePick.value = 'main/all'
+            navShow.value = true
+        }
+    },
+    { immediate: true }
+)
 
 const onChange = (name) => {
-    if (name == "user") {
+    if (name === "user") {
         navShow.value = false
     } else {
         navShow.value = true
     }
-
-    router.push(`${'/' + name}`)
+    router.push(`/${name}`)
 }
 
 const isTransferRoute = computed(() => {
     return route.path.includes('transfer')
 })
 
-// 控制 Transfer 组件的显示/隐藏
 const isTransferShow = computed(() => isTransferRoute.value);
 
 const isMainRoute = computed(() => {
@@ -139,6 +152,13 @@ const isMainRoute = computed(() => {
             .user-role {
                 font-size: 15px;
                 color: #626aef;
+                font-weight: 600;
+
+                &.is-admin {
+                    color: #e6a23c;
+                    display: flex;
+                    align-items: center;
+                }
             }
         }
 
@@ -151,6 +171,7 @@ const isMainRoute = computed(() => {
                 font-size: 15px;
                 margin-right: 15px;
                 color: rgb(114, 105, 120);
+                cursor: pointer;
             }
         }
     }
@@ -170,6 +191,7 @@ const isMainRoute = computed(() => {
     .content-section {
         flex: 1;
         overflow-y: auto;
+        padding-bottom: 60px;
     }
 
     .footer-bar {
@@ -178,7 +200,9 @@ const isMainRoute = computed(() => {
         bottom: 0;
         left: 0;
         background-color: #fff;
-        z-index: 1;
+        z-index: 10;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        border-top: 1px solid #ebeef5;
     }
 
     .tab-navigation {
@@ -189,24 +213,48 @@ const isMainRoute = computed(() => {
 
         .el-tabs__item {
             font-size: 20px;
-            color: #626aef;
+            color: #8c8fae;
             flex-direction: column;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            user-select: none;
+            padding: 4px 18px !important;
+
+            .icon-class {
+                transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                display: inline-block;
+            }
 
             .tab-text {
-                font-size: 10px;
+                font-size: 11px;
+                font-weight: 500;
+                margin-top: 3px;
+                transition: color 0.2s;
             }
 
             &.is-active {
-                color: #414372;
+                color: #409eff;
+
+                .icon-class {
+                    animation: tabBounce 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    transform: translateY(-2px) scale(1.15);
+                    color: #409eff;
+                }
+
+                .tab-text {
+                    font-weight: 600;
+                    color: #409eff;
+                }
             }
 
             &:hover {
-                color: #414372;
+                color: #409eff;
             }
         }
 
         .el-tabs__active-bar {
-            background-color: #414372;
+            background-color: #409eff;
+            height: 3px;
+            border-radius: 3px;
         }
     }
 }

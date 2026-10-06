@@ -3,7 +3,7 @@
         <ElImage v-if="userId" :style="{ width: 100 + '%', height: 100 + '%' }"
             :src="proxy.globalInfo.avatarUrl + userId" fit="cover" loading="lazy"></ElImage>
 
-        <div class="no-login" v-else>未登录</div>
+        <div class="no-login" v-else>登录</div>
     </div>
 </template>
 
@@ -31,15 +31,13 @@ const props = defineProps({
 
 <style lang="scss">
 .avatar {
-    display: flex;
     overflow: hidden;
-    align-items: center;
     background-color: #f0f0f0;
 
     .no-login {
         width: 100%;
         font-size: 10px;
-        text-align: center;
+        align-self: center;
     }
 }
 </style>

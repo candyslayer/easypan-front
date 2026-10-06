@@ -29,7 +29,13 @@
                     </div>
                 </template>
 
-                <template #delFile="{ item }">
+                <template #share="{ item }">
+                    <div>
+                        <span class="dripicons-direction" @click="openShare"></span>
+                    </div>
+                </template>
+
+                <template #delete="{ item }">
                     <div>
                         <span class="dripicons-trash" @click="delFile"></span>
                     </div>
@@ -98,17 +104,65 @@
 
     <Preview ref="previewRef" @click.stop></Preview>
 
-    
+    <!-- 分享弹窗 -->
+    <Dialog
+        :show="shareDialog.show"
+        title="分享文件"
+        width="420px"
+        :buttons="shareDialog.buttons"
+        @close="shareDialog.show = false"
+    >
+        <div class="share-dialog-body" v-if="!shareResult.shareId">
+            <el-form :model="shareForm" label-width="80px" size="default">
+                <el-form-item label="文件名">
+                    <span class="share-file-name">{{ currentSelectedRow?.fileName }}</span>
+                </el-form-item>
+                <el-form-item label="有效期">
+                    <el-radio-group v-model="shareForm.validType">
+                        <el-radio :label="0">1天</el-radio>
+                        <el-radio :label="1">7天</el-radio>
+                        <el-radio :label="2">30天</el-radio>
+                        <el-radio :label="3">永久有效</el-radio>
+                    </el-radio-group>
+                </el-form-item>
+                <el-form-item label="提取码">
+                    <el-radio-group v-model="shareForm.codeType">
+                        <el-radio :label="0">系统随机</el-radio>
+                        <el-radio :label="1">自定义</el-radio>
+                    </el-radio-group>
+                </el-form-item>
+                <el-form-item v-if="shareForm.codeType === 1" label="自定义码">
+                    <el-input v-model.trim="shareForm.code" maxlength="5" placeholder="请输入5位提取码" />
+                </el-form-item>
+            </el-form>
+        </div>
+        <div class="share-result-body" v-else>
+            <div class="share-success-tip">
+                <span class="dripicons-checkmark tip-icon"></span>
+                <span>分享链接生成成功！</span>
+            </div>
+            <div class="share-info-block">
+                <div class="info-row">
+                    <span class="info-label">分享链接：</span>
+                    <span class="info-val">{{ shareResult.shareUrl }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">提取码：</span>
+                    <span class="info-val code-highlight">{{ shareResult.code }}</span>
+                </div>
+            </div>
+        </div>
+    </Dialog>
 </template>
 
 <script setup>
-import { ElButton, ElUpload, ElInput } from 'element-plus';
+import { ElButton, ElUpload, ElInput, ElRadioGroup, ElRadio, ElForm, ElFormItem } from 'element-plus';
 import Table from '@/components/Table.vue';
 import Icon from '@/components/Icon.vue';
 import Preview from '@/components/preview/Preview.vue';
 import Dialog from '@/components/Dialog.vue';
 import OperationMenu from '@/components/OperationMenu.vue';
-import { ref, computed, getCurrentInstance, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, reactive, computed, getCurrentInstance, onMounted, onUnmounted, nextTick } from 'vue';
 import CategoryInfo from '@/js/CategoryInfo';
 
 const { proxy } = getCurrentInstance()
@@ -121,7 +175,8 @@ const api = {
     newFolder: "/file/newFolder",
     move: "/file/moveFileFolder",
     renameFileFolder: "/file/renameFileFolder",
-    delFile: "/file/delFile"
+    delFile: "/file/delFile",
+    shareFile: "/share/shareFile"
 }
 
 const previewRef = ref()
@@ -161,6 +216,12 @@ const fileOperations = [
         label: '下载'
     },
     {
+        name: 'share',
+        icon: 'dripicons-direction',
+        type: 'warning',
+        label: '分享'
+    },
+    {
         name: 'move',
         icon: 'dripicons-move',
         type: 'info',
@@ -179,6 +240,8 @@ const fileOperations = [
         label: '删除'
     }
 ];
+
+const currentSelectedRow = ref(null)
 
 
 // 初始化操作按钮
@@ -513,13 +576,148 @@ const delFile = () => {
     })
 }
 
-    const moveFileFolderDialog = ref()
+// 分享逻辑
+const shareDialog = reactive({
+    show: false,
+    buttons: [
+        {
+            text: '创建分享',
+            type: 'primary',
+            click: () => submitShare()
+        }
+    ]
+})
+
+const shareForm = reactive({
+    validType: 1,
+    codeType: 0,
+    code: ''
+})
+
+const shareResult = reactive({
+    shareId: '',
+    code: '',
+    shareUrl: ''
+})
+
+const openShare = () => {
+    if (!selectedId.value) {
+        proxy.message.warning('请选择需要分享的文件！')
+        return
+    }
+    shareResult.shareId = ''
+    shareResult.code = ''
+    shareResult.shareUrl = ''
+    shareForm.validType = 1
+    shareForm.codeType = 0
+    shareForm.code = ''
+    shareDialog.buttons = [
+        {
+            text: '创建分享',
+            type: 'primary',
+            click: () => submitShare()
+        }
+    ]
+    shareDialog.show = true
+}
+
+const submitShare = async () => {
+    let params = {
+        fileId: selectedId.value,
+        validType: shareForm.validType,
+        code: shareForm.codeType === 1 ? shareForm.code : ''
+    }
+    let result = await proxy.request({
+        url: api.shareFile,
+        params: params
+    })
+    if (!result) return
+    shareResult.shareId = result.data.shareId
+    shareResult.code = result.data.code
+    shareResult.shareUrl = `${window.location.origin}/share/${result.data.shareId}`
+    shareDialog.buttons = [
+        {
+            text: '复制链接及提取码',
+            type: 'primary',
+            click: () => copyShareResult()
+        }
+    ]
+}
+
+const copyShareResult = () => {
+    const text = `链接: ${shareResult.shareUrl} 提取码: ${shareResult.code}`
+    navigator.clipboard.writeText(text).then(() => {
+        proxy.message.success('分享链接与提取码已复制！')
+        shareDialog.show = false
+    }).catch(() => {
+        proxy.message.info(text)
+    })
+}
 
 </script>
 
 <style lang="scss">
 .operation-section {
     margin-bottom: 10px;
+}
+
+.share-dialog-body {
+    padding: 10px 0;
+
+    .share-file-name {
+        font-weight: 500;
+        color: #303133;
+    }
+}
+
+.share-result-body {
+    padding: 15px 0;
+
+    .share-success-tip {
+        display: flex;
+        align-items: center;
+        color: #67c23a;
+        font-weight: 600;
+        font-size: 15px;
+        margin-bottom: 15px;
+
+        .tip-icon {
+            font-size: 20px;
+            margin-right: 6px;
+        }
+    }
+
+    .share-info-block {
+        background: #f8f9fb;
+        border-radius: 8px;
+        padding: 12px 14px;
+
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+            font-size: 13px;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+
+            .info-label {
+                color: #909399;
+                width: 70px;
+            }
+
+            .info-val {
+                color: #303133;
+                word-break: break-all;
+
+                &.code-highlight {
+                    font-weight: 700;
+                    color: #409eff;
+                    font-size: 15px;
+                }
+            }
+        }
+    }
 }
 
 .file-list {

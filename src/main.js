@@ -11,6 +11,7 @@ import request from './utils/Reuest'
 import message from './utils/Message'
 import Verify from './utils/Verify'
 import Utils from './utils/Utils'
+import confirm from './utils/Confirm'
 
 const app = createApp(App)
 
@@ -24,6 +25,7 @@ app.config.globalProperties.request = request
 app.config.globalProperties.message = message
 app.config.globalProperties.vueCookies = VueCookies
 app.config.globalProperties.Utils = Utils
+app.config.globalProperties.confirm = confirm
 
 app.use(router)
 

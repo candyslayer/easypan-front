@@ -12,7 +12,7 @@
                     <ElFormItem class="input-item" prop="email">
                         <!-- 采用绝对定位脱离文档，不然把输入框撑下去，不好看 -->
                         <span class="input-tip" v-if="formData.email">邮箱</span>
-                        <ElInput v-model="formData.email" clearable placeholder="邮箱" :maxlength="110">
+                        <ElInput v-model.trim="formData.email" clearable placeholder="邮箱" :minlength="150"  :maxlength="110">
                         </ElInput>
 
                         <div class="checkCode-btn" v-if="opType == 1 || opType == 2">
