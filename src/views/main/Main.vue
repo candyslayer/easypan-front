@@ -152,6 +152,16 @@
                 <span class="material-symbols-outlined text-slate">refresh</span>
                 <span>刷新</span>
             </button>
+
+            <!-- 选中文件时的快捷操作 (外链分享 & 下载) -->
+            <button class="action-pill outline-pill" @click="openShare" v-if="selectedId" title="分享选中的文件">
+                <span class="material-symbols-outlined" style="color: #004ac6;">share</span>
+                <span>分享外链</span>
+            </button>
+            <button class="action-pill outline-pill" @click="hadleDownload(selectedItem)" v-if="selectedId && selectedItem?.folderType !== 1" title="下载选中的文件">
+                <span class="material-symbols-outlined" style="color: #004ac6;">download</span>
+                <span>下载</span>
+            </button>
         </div>
 
         <!-- 5. 视图展示区域 (网格视图 Grid View) -->
@@ -452,55 +462,185 @@
         <!-- 9. 预览组件与弹窗 -->
         <Preview ref="previewRef" @click.stop></Preview>
 
-        <!-- 10. 分享弹窗 -->
-        <Dialog
-            :show="shareDialog.show"
-            title="分享文件"
-            width="420px"
-            :buttons="shareDialog.buttons"
-            @close="shareDialog.show = false"
-        >
-            <div class="share-dialog-body" v-if="!shareResult.shareId">
-                <el-form :model="shareForm" label-width="80px" size="default">
-                    <el-form-item label="文件名">
-                        <span class="share-file-name">{{ drawerItem?.fileName || currentSelectedRow?.fileName }}</span>
-                    </el-form-item>
-                    <el-form-item label="有效期">
-                        <el-radio-group v-model="shareForm.validType">
-                            <el-radio :label="0">1天</el-radio>
-                            <el-radio :label="1">7天</el-radio>
-                            <el-radio :label="2">30天</el-radio>
-                            <el-radio :label="3">永久有效</el-radio>
-                        </el-radio-group>
-                    </el-form-item>
-                    <el-form-item label="提取码">
-                        <el-radio-group v-model="shareForm.codeType">
-                            <el-radio :label="0">系统随机</el-radio>
-                            <el-radio :label="1">自定义</el-radio>
-                        </el-radio-group>
-                    </el-form-item>
-                    <el-form-item v-if="shareForm.codeType === 1" label="自定义码">
-                        <el-input v-model.trim="shareForm.code" maxlength="5" placeholder="请输入5位提取码" />
-                    </el-form-item>
-                </el-form>
-            </div>
-            <div class="share-result-body" v-else>
-                <div class="share-success-tip">
-                    <span class="material-symbols-outlined tip-icon">check_circle</span>
-                    <span>分享链接已生成！</span>
-                </div>
-                <div class="share-info-block">
-                    <div class="info-row">
-                        <span class="info-label">分享链接：</span>
-                        <span class="info-val">{{ shareResult.shareUrl }}</span>
+        <!-- 10. Aether Drive 风格外链分享弹窗 (Aether Share Modal) -->
+        <transition name="share-modal-fade">
+            <div class="aether-share-modal-overlay" v-if="shareDialog.show" @click="closeShareDialog">
+                <div class="aether-share-modal-card" @click.stop>
+                    <!-- 弹窗顶栏 -->
+                    <div class="modal-header-row">
+                        <div class="modal-title-left">
+                            <div class="title-icon-badge">
+                                <span class="material-symbols-outlined">share</span>
+                            </div>
+                            <div class="title-text-group">
+                                <h3 class="modal-main-title">创建外链分享</h3>
+                                <span class="modal-sub-desc">生成可公开访问的安全提取码链接</span>
+                            </div>
+                        </div>
+                        <button class="modal-close-btn" @click="closeShareDialog" title="关闭">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">提取码：</span>
-                        <span class="info-val code-highlight">{{ shareResult.code }}</span>
+
+                    <!-- 目标文件信息卡片 -->
+                    <div class="shared-file-preview-card" v-if="targetShareFile.fileName">
+                        <div class="file-icon-wrapper">
+                            <Icon
+                                v-if="targetShareFile.folderType === 1"
+                                :fileType="0"
+                                :width="38"
+                            ></Icon>
+                            <Icon
+                                v-else
+                                :cover="(targetShareFile.fileType === 3 || targetShareFile.fileType === 1) && targetShareFile.status === 2 ? targetShareFile.fileCover : ''"
+                                :fileType="targetShareFile.fileType"
+                                :width="38"
+                            ></Icon>
+                        </div>
+                        <div class="file-meta-col min-w-0">
+                            <div class="file-name-text truncate" :title="targetShareFile.fileName">
+                                {{ targetShareFile.fileName }}
+                            </div>
+                            <div class="file-sub-info">
+                                <span>{{ targetShareFile.fileSize ? proxy.Utils.size2Str(targetShareFile.fileSize) : '文件夹' }}</span>
+                                <span class="dot-sep">·</span>
+                                <span>{{ formatDate(targetShareFile.lastUpdateTime) }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 1. 配置界面 (尚未生成结果时) -->
+                    <div class="modal-config-body" v-if="!shareResult.shareId">
+                        <!-- 有效期选择 -->
+                        <div class="config-section">
+                            <div class="section-label-row">
+                                <span class="material-symbols-outlined section-icon">schedule</span>
+                                <span class="section-label">有效期设置</span>
+                            </div>
+                            <div class="segmented-pill-row">
+                                <button
+                                    v-for="opt in validityOptions"
+                                    :key="opt.val"
+                                    type="button"
+                                    class="seg-pill-btn"
+                                    :class="{ 'is-active': shareForm.validType === opt.val }"
+                                    @click="shareForm.validType = opt.val"
+                                >
+                                    {{ opt.label }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 提取码设置 -->
+                        <div class="config-section">
+                            <div class="section-label-row">
+                                <span class="material-symbols-outlined section-icon">lock</span>
+                                <span class="section-label">提取码安全验证</span>
+                            </div>
+                            <div class="segmented-pill-row code-type-row">
+                                <button
+                                    type="button"
+                                    class="seg-pill-btn"
+                                    :class="{ 'is-active': shareForm.codeType === 0 }"
+                                    @click="shareForm.codeType = 0"
+                                >
+                                    <span class="material-symbols-outlined btn-mini-icon">shuffle</span>
+                                    <span>系统随机生成</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="seg-pill-btn"
+                                    :class="{ 'is-active': shareForm.codeType === 1 }"
+                                    @click="shareForm.codeType = 1"
+                                >
+                                    <span class="material-symbols-outlined btn-mini-icon">edit</span>
+                                    <span>自定义提取码</span>
+                                </button>
+                            </div>
+
+                            <!-- 自定义提取码输入框 -->
+                            <div class="custom-code-input-wrap" v-if="shareForm.codeType === 1">
+                                <input
+                                    v-model.trim="shareForm.code"
+                                    type="text"
+                                    class="code-text-input"
+                                    maxlength="5"
+                                    placeholder="输入 5 位自定义提取码"
+                                    @input="shareForm.code = shareForm.code.toUpperCase()"
+                                />
+                                <span class="code-length-tag">{{ shareForm.code.length }}/5</span>
+                            </div>
+                        </div>
+
+                        <!-- 底部操作按钮 -->
+                        <div class="modal-footer-actions">
+                            <button class="footer-btn cancel-btn" @click="closeShareDialog">
+                                取消
+                            </button>
+                            <button class="footer-btn submit-btn" @click="submitShare">
+                                <span class="material-symbols-outlined">link</span>
+                                <span>创建分享外链</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 2. 结果界面 (生成成功后) -->
+                    <div class="modal-result-body" v-else>
+                        <!-- 成功提示横幅 -->
+                        <div class="result-success-banner">
+                            <span class="material-symbols-outlined success-icon">check_circle</span>
+                            <div class="banner-text">
+                                <div class="banner-title">外链分享已生成！</div>
+                                <div class="banner-desc">持有此链接及提取码的任何人均可访问该文件</div>
+                            </div>
+                        </div>
+
+                        <!-- 分享链接与提取码信息卡 -->
+                        <div class="share-details-card">
+                            <!-- 链接行 -->
+                            <div class="detail-item-box">
+                                <div class="detail-label-line">
+                                    <span class="label-name">公开访问链接</span>
+                                    <button class="copy-badge-btn" @click="copyOnlyLink">
+                                        <span class="material-symbols-outlined">content_copy</span>
+                                        <span>复制链接</span>
+                                    </button>
+                                </div>
+                                <div class="detail-value-box font-code">
+                                    {{ shareResult.shareUrl }}
+                                </div>
+                            </div>
+
+                            <!-- 提取码行 -->
+                            <div class="detail-item-box">
+                                <div class="detail-label-line">
+                                    <span class="label-name">安全提取码</span>
+                                    <button class="copy-badge-btn" @click="copyOnlyCode">
+                                        <span class="material-symbols-outlined">content_copy</span>
+                                        <span>复制代码</span>
+                                    </button>
+                                </div>
+                                <div class="code-highlight-box">
+                                    <span class="highlight-code">{{ shareResult.code }}</span>
+                                    <span class="code-type-pill">5位专属码</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 底部结果操作按钮 -->
+                        <div class="modal-footer-actions result-actions">
+                            <button class="footer-btn submit-btn copy-all-btn" @click="copyShareResult">
+                                <span class="material-symbols-outlined">content_copy</span>
+                                <span>一键复制链接与提取码</span>
+                            </button>
+                            <button class="footer-btn cancel-btn" @click="closeShareDialog">
+                                完成关闭
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </Dialog>
+        </transition>
     </div>
 </template>
 
@@ -969,15 +1109,19 @@ const delFile = () => {
 };
 
 // 分享逻辑
+const validityOptions = [
+    { label: '1 天', val: 0 },
+    { label: '7 天', val: 1 },
+    { label: '30 天', val: 2 },
+    { label: '永久有效', val: 3 }
+];
+
+const targetShareFile = computed(() => {
+    return drawerItem.value || currentSelectedRow.value || (tableData.value?.list && tableData.value.list.find(i => i.fileId === selectedId.value)) || {};
+});
+
 const shareDialog = reactive({
-    show: false,
-    buttons: [
-        {
-            text: '创建分享',
-            type: 'primary',
-            click: () => submitShare()
-        }
-    ]
+    show: false
 });
 
 const shareForm = reactive({
@@ -993,7 +1137,8 @@ const shareResult = reactive({
 });
 
 const openShare = () => {
-    if (!selectedId.value) {
+    const file = targetShareFile.value;
+    if (!file || !file.fileId) {
         proxy.message.warning('请选择需要分享的文件！');
         return;
     }
@@ -1003,21 +1148,31 @@ const openShare = () => {
     shareForm.validType = 1;
     shareForm.codeType = 0;
     shareForm.code = '';
-    shareDialog.buttons = [
-        {
-            text: '创建分享',
-            type: 'primary',
-            click: () => submitShare()
-        }
-    ];
     shareDialog.show = true;
 };
 
+const closeShareDialog = () => {
+    shareDialog.show = false;
+};
+
 const submitShare = async () => {
+    const fileId = targetShareFile.value.fileId || selectedId.value;
+    if (!fileId) {
+        proxy.message.warning('请选择需要分享的文件！');
+        return;
+    }
+
+    if (shareForm.codeType === 1) {
+        if (!shareForm.code || shareForm.code.trim().length !== 5) {
+            proxy.message.warning('自定义提取码必须为 5 位字母或数字！');
+            return;
+        }
+    }
+
     let params = {
-        fileId: selectedId.value,
+        fileId: fileId,
         validType: shareForm.validType,
-        code: shareForm.codeType === 1 ? shareForm.code : ''
+        code: shareForm.codeType === 1 ? shareForm.code.trim().toUpperCase() : ''
     };
     let result = await proxy.request({
         url: api.shareFile,
@@ -1027,13 +1182,6 @@ const submitShare = async () => {
     shareResult.shareId = result.data.shareId;
     shareResult.code = result.data.code;
     shareResult.shareUrl = `${window.location.origin}/share/${result.data.shareId}`;
-    shareDialog.buttons = [
-        {
-            text: '复制链接及提取码',
-            type: 'primary',
-            click: () => copyShareResult()
-        }
-    ];
 };
 
 const copyShareResult = () => {
@@ -1043,6 +1191,24 @@ const copyShareResult = () => {
         shareDialog.show = false;
     }).catch(() => {
         proxy.message.info(text);
+    });
+};
+
+const copyOnlyLink = () => {
+    if (!shareResult.shareUrl) return;
+    navigator.clipboard.writeText(shareResult.shareUrl).then(() => {
+        proxy.message.success('分享链接已复制！');
+    }).catch(() => {
+        proxy.message.info(shareResult.shareUrl);
+    });
+};
+
+const copyOnlyCode = () => {
+    if (!shareResult.code) return;
+    navigator.clipboard.writeText(shareResult.code).then(() => {
+        proxy.message.success('提取码已复制！');
+    }).catch(() => {
+        proxy.message.info(shareResult.code);
     });
 };
 
@@ -2237,56 +2403,498 @@ watch(
         transform: translateY(100%);
     }
 
-    // 分享弹窗内容样式
-    .share-file-name {
-        font-weight: 600;
-        color: #004ac6;
-    }
+    // 10. Aether Drive 风格外链分享弹窗 (Aether Share Modal)
+    .aether-share-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(11, 28, 48, 0.48);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        box-sizing: border-box;
 
-    .share-result-body {
-        padding: 8px 0;
-
-        .share-success-tip {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: #10b981;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 12px;
-
-            .tip-icon {
-                font-size: 20px;
-            }
+        @media (max-width: 640px) {
+            align-items: flex-end;
+            padding: 0;
         }
 
-        .share-info-block {
-            background: #eff4ff;
-            padding: 12px;
-            border-radius: 10px;
+        .aether-share-modal-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 460px;
+            border-radius: 20px;
+            box-shadow: 0 16px 40px rgba(11, 28, 48, 0.16);
+            border: 1px solid #dce9ff;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            transform-origin: center;
 
-            .info-row {
+            @media (max-width: 640px) {
+                border-radius: 24px 24px 0 0;
+                max-width: 100%;
+                max-height: 85vh;
+                overflow-y: auto;
+                border-bottom: none;
+            }
+
+            .modal-header-row {
                 display: flex;
-                font-size: 13px;
+                align-items: center;
+                justify-content: space-between;
+                padding: 16px 20px;
+                border-bottom: 1px solid #f0f4fd;
 
-                .info-label {
-                    color: #565e74;
-                    flex-shrink: 0;
-                }
+                .modal-title-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
 
-                .info-val {
-                    color: #0b1c30;
-                    word-break: break-all;
-
-                    &.code-highlight {
+                    .title-icon-badge {
+                        width: 38px;
+                        height: 38px;
+                        border-radius: 12px;
+                        background: #eff4ff;
                         color: #004ac6;
-                        font-weight: 700;
-                        font-family: 'JetBrains Mono', monospace;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        flex-shrink: 0;
+
+                        span {
+                            font-size: 20px;
+                        }
+                    }
+
+                    .title-text-group {
+                        .modal-main-title {
+                            font-size: 16px;
+                            font-weight: 700;
+                            color: #0b1c30;
+                            margin: 0;
+                            line-height: 1.25;
+                        }
+
+                        .modal-sub-desc {
+                            font-size: 11px;
+                            color: #737686;
+                            margin-top: 2px;
+                            display: block;
+                        }
                     }
                 }
+
+                .modal-close-btn {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    background: #f0f4fd;
+                    border: none;
+                    color: #565e74;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.15s;
+
+                    span {
+                        font-size: 18px;
+                    }
+
+                    &:hover {
+                        background: #dce9ff;
+                        color: #0b1c30;
+                    }
+                }
+            }
+
+            // 预览选中的文件卡片
+            .shared-file-preview-card {
+                margin: 14px 20px 0;
+                padding: 10px 14px;
+                background: #f8faff;
+                border: 1px solid #e5eeff;
+                border-radius: 14px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+
+                .file-icon-wrapper {
+                    flex-shrink: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .file-meta-col {
+                    flex: 1;
+
+                    .file-name-text {
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: #0b1c30;
+                    }
+
+                    .file-sub-info {
+                        font-size: 11px;
+                        color: #737686;
+                        margin-top: 2px;
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+
+                        .dot-sep {
+                            color: #c3c6d7;
+                        }
+                    }
+                }
+            }
+
+            // 1. 配置界面
+            .modal-config-body {
+                padding: 16px 20px 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+
+                .config-section {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+
+                    .section-label-row {
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: #434655;
+
+                        .section-icon {
+                            font-size: 16px;
+                            color: #004ac6;
+                        }
+                    }
+
+                    .segmented-pill-row {
+                        display: grid;
+                        grid-template-columns: repeat(4, 1fr);
+                        gap: 6px;
+                        background: #eff4ff;
+                        padding: 4px;
+                        border-radius: 12px;
+
+                        &.code-type-row {
+                            grid-template-columns: repeat(2, 1fr);
+                        }
+
+                        .seg-pill-btn {
+                            border: none;
+                            background: transparent;
+                            padding: 8px 10px;
+                            border-radius: 8px;
+                            font-size: 12px;
+                            font-weight: 500;
+                            color: #565e74;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 5px;
+                            transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+
+                            .btn-mini-icon {
+                                font-size: 15px;
+                            }
+
+                            &:hover {
+                                color: #0b1c30;
+                            }
+
+                            &.is-active {
+                                background: #ffffff;
+                                color: #004ac6;
+                                font-weight: 700;
+                                box-shadow: 0 2px 6px rgba(0, 74, 198, 0.12);
+                            }
+                        }
+                    }
+
+                    .custom-code-input-wrap {
+                        position: relative;
+                        margin-top: 4px;
+
+                        .code-text-input {
+                            width: 100%;
+                            height: 42px;
+                            box-sizing: border-box;
+                            padding: 0 46px 0 14px;
+                            background: #f8faff;
+                            border: 1.5px solid #dce9ff;
+                            border-radius: 10px;
+                            font-family: 'JetBrains Mono', monospace;
+                            font-size: 15px;
+                            font-weight: 700;
+                            letter-spacing: 2px;
+                            color: #004ac6;
+                            outline: none;
+                            transition: all 0.2s;
+
+                            &::placeholder {
+                                font-family: inherit;
+                                font-size: 12px;
+                                font-weight: normal;
+                                letter-spacing: normal;
+                                color: #94a3b8;
+                            }
+
+                            &:focus {
+                                background: #ffffff;
+                                border-color: #004ac6;
+                                box-shadow: 0 0 0 3px rgba(0, 74, 198, 0.12);
+                            }
+                        }
+
+                        .code-length-tag {
+                            position: absolute;
+                            right: 12px;
+                            top: 50%;
+                            transform: translateY(-50%);
+                            font-size: 11px;
+                            color: #737686;
+                            font-family: 'JetBrains Mono', monospace;
+                            font-weight: 600;
+                            pointer-events: none;
+                        }
+                    }
+                }
+
+                .modal-footer-actions {
+                    display: flex;
+                    gap: 10px;
+                    margin-top: 4px;
+
+                    .footer-btn {
+                        flex: 1;
+                        height: 42px;
+                        border-radius: 12px;
+                        font-size: 13px;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 6px;
+                        cursor: pointer;
+                        transition: all 0.2s;
+
+                        span.material-symbols-outlined {
+                            font-size: 18px;
+                        }
+
+                        &.cancel-btn {
+                            border: 1px solid #dce9ff;
+                            background: #ffffff;
+                            color: #434655;
+
+                            &:hover {
+                                background: #f0f4fd;
+                                color: #0b1c30;
+                            }
+                        }
+
+                        &.submit-btn {
+                            border: none;
+                            background: #004ac6;
+                            color: #ffffff;
+                            box-shadow: 0 3px 10px rgba(0, 74, 198, 0.25);
+
+                            &:hover {
+                                background: #2563eb;
+                            }
+
+                            &:active {
+                                transform: scale(0.98);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. 结果界面
+            .modal-result-body {
+                padding: 16px 20px 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+
+                .result-success-banner {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px 14px;
+                    background: #ecfdf5;
+                    border: 1px solid #a7f3d0;
+                    border-radius: 14px;
+
+                    .success-icon {
+                        color: #10b981;
+                        font-size: 26px;
+                        flex-shrink: 0;
+                    }
+
+                    .banner-text {
+                        .banner-title {
+                            font-size: 13px;
+                            font-weight: 700;
+                            color: #065f46;
+                        }
+
+                        .banner-desc {
+                            font-size: 11px;
+                            color: #047857;
+                            margin-top: 2px;
+                        }
+                    }
+                }
+
+                .share-details-card {
+                    background: #f8faff;
+                    border: 1px solid #dce9ff;
+                    border-radius: 14px;
+                    padding: 14px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+
+                    .detail-item-box {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 6px;
+
+                        .detail-label-line {
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+
+                            .label-name {
+                                font-size: 11px;
+                                font-weight: 600;
+                                color: #565e74;
+                            }
+
+                            .copy-badge-btn {
+                                border: none;
+                                background: #eff4ff;
+                                color: #004ac6;
+                                font-size: 11px;
+                                font-weight: 600;
+                                padding: 3px 8px;
+                                border-radius: 6px;
+                                display: flex;
+                                align-items: center;
+                                gap: 3px;
+                                cursor: pointer;
+                                transition: background 0.15s;
+
+                                span {
+                                    font-size: 13px;
+                                }
+
+                                &:hover {
+                                    background: #dce9ff;
+                                }
+                            }
+                        }
+
+                        .detail-value-box {
+                            padding: 8px 12px;
+                            background: #ffffff;
+                            border: 1px solid #e5eeff;
+                            border-radius: 8px;
+                            font-size: 12px;
+                            color: #0b1c30;
+                            word-break: break-all;
+
+                            &.font-code {
+                                font-family: 'JetBrains Mono', monospace;
+                            }
+                        }
+
+                        .code-highlight-box {
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            padding: 8px 12px;
+                            background: #ffffff;
+                            border: 1px solid #e5eeff;
+                            border-radius: 8px;
+
+                            .highlight-code {
+                                font-family: 'JetBrains Mono', monospace;
+                                font-size: 18px;
+                                font-weight: 800;
+                                letter-spacing: 3px;
+                                color: #004ac6;
+                            }
+
+                            .code-type-pill {
+                                font-size: 10px;
+                                color: #565e74;
+                                background: #eff4ff;
+                                padding: 2px 6px;
+                                border-radius: 4px;
+                            }
+                        }
+                    }
+                }
+
+                .modal-footer-actions.result-actions {
+                    flex-direction: column;
+                    gap: 8px;
+                    margin-top: 4px;
+
+                    .copy-all-btn {
+                        width: 100%;
+                        background: #10b981;
+                        box-shadow: 0 3px 10px rgba(16, 185, 129, 0.25);
+
+                        &:hover {
+                            background: #059669;
+                        }
+                    }
+
+                    .cancel-btn {
+                        width: 100%;
+                    }
+                }
+            }
+        }
+    }
+
+    // 分享弹窗过渡动画
+    .share-modal-fade-enter-active,
+    .share-modal-fade-leave-active {
+        transition: opacity 0.2s ease;
+
+        .aether-share-modal-card {
+            transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease;
+        }
+    }
+
+    .share-modal-fade-enter-from,
+    .share-modal-fade-leave-to {
+        opacity: 0;
+
+        .aether-share-modal-card {
+            opacity: 0;
+            transform: scale(0.95) translateY(10px);
+
+            @media (max-width: 640px) {
+                transform: translateY(100%);
             }
         }
     }
