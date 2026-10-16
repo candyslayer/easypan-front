@@ -12,11 +12,13 @@
                     <ElFormItem class="input-item" prop="email">
                         <!-- 采用绝对定位脱离文档，不然把输入框撑下去，不好看 -->
                         <span class="input-tip" v-if="formData.email">邮箱</span>
-                        <ElInput v-model.trim="formData.email" clearable placeholder="邮箱" :minlength="150"  :maxlength="110">
-                        </ElInput>
+                        <div class="input-with-action">
+                            <ElInput v-model.trim="formData.email" clearable placeholder="邮箱" :maxlength="150">
+                            </ElInput>
 
-                        <div class="checkCode-btn" v-if="opType == 1 || opType == 2">
-                            <ElButton color="#626aef" size="small" @click="sendEmailCode">获取验证码</ElButton>
+                            <div class="checkCode-btn" v-if="opType == 1 || opType == 2">
+                                <ElButton color="#626aef" size="small" @click="sendEmailCode">获取验证码</ElButton>
+                            </div>
                         </div>
                     </ElFormItem>
 
@@ -58,10 +60,11 @@
                     <ElFormItem class="input-item" prop="checkCode">
                         <span class="input-tip" v-if="formData.checkCode">验证码</span>
 
-                        <ElInput v-model="formData.checkCode" placeholder="验证码" :maxlength="5">
-                        </ElInput>
-
-                        <img class="checkCode" :src="checkCodeUrl" @click="changeCheckCode(0)">
+                        <div class="check-code-panel">
+                            <ElInput v-model="formData.checkCode" placeholder="验证码" :maxlength="5">
+                            </ElInput>
+                            <img class="checkCode" :src="checkCodeUrl" @click="changeCheckCode(0)" title="点击刷新验证码">
+                        </div>
                     </ElFormItem>
 
                     <ElFormItem>
@@ -103,8 +106,10 @@
                         {{ sendEmailFormData.email }}
                     </ElFormItem>
                     <ElFormItem class="input-item" prop="checkCode">
-                        <img :src="checkCode4SendEmail" @click="changeCheckCode(1)">
-                        <ElInput v-model="sendEmailFormData.checkCode" maxlength="5" style="width: 50%;"></ElInput>
+                        <div class="check-code-panel">
+                            <ElInput v-model="sendEmailFormData.checkCode" placeholder="验证码" maxlength="5"></ElInput>
+                            <img class="checkCode" :src="checkCode4SendEmail" @click="changeCheckCode(1)" title="点击刷新验证码">
+                        </div>
                     </ElFormItem>
 
                     <ElFormItem>
@@ -333,61 +338,119 @@ const dosubmit = () => {
 
 </script>
 <style lang="scss">
+.container-layout {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    box-sizing: border-box;
+}
+
 .header {
     color: #626aef;
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 75px 0px;
-    font-size: 50px;
+    padding-bottom: 24px;
+    font-size: 46px;
     font-weight: bolder;
+    user-select: none;
 }
 
 .container {
+    width: 100%;
+    max-width: 380px;
+    box-sizing: border-box;
+
     .login-register {
         .login-register-title {
-            font-size: 25px;
+            font-size: 26px;
             font-weight: bold;
-            color: rgb(88, 88, 88);
+            color: #333;
+            display: inline-block;
+            margin-bottom: 6px;
         }
 
         .login-register {
+            margin-top: 25px;
+
             .input-item {
-                margin: 33px 0px;
+                margin: 28px 0px;
                 position: relative;
 
                 .input-tip {
                     position: absolute;
-                    bottom: 22px;
-
-                    font-size: small;
-                    color: rgb(164, 158, 158);
+                    top: -18px;
+                    left: 0;
+                    font-size: 12px;
+                    color: #8c8c8c;
+                    line-height: 1;
+                    user-select: none;
+                    transition: all 0.2s ease;
                 }
 
-                .checkCode-btn {
-                    position: absolute;
-                    right: 0px;
-                    top: 25px;
-                    margin-top: 3px;
+                .input-with-action {
+                    display: flex;
+                    align-items: center;
+                    width: 100%;
+                    position: relative;
+
+                    .el-input {
+                        width: 100%;
+                    }
+
+                    .checkCode-btn {
+                        position: absolute;
+                        right: 0;
+                        bottom: 4px;
+                        z-index: 2;
+                    }
                 }
 
-                .checkCode {
-                    position: absolute;
-                    right: 0px;
+                .check-code-panel {
+                    display: flex;
+                    align-items: center;
+                    width: 100%;
+                    gap: 12px;
+
+                    .el-input {
+                        flex: 1;
+                    }
+
+                    .checkCode {
+                        height: 34px;
+                        cursor: pointer;
+                        border-radius: 4px;
+                        flex-shrink: 0;
+                    }
                 }
-            }
 
+                .el-input__wrapper {
+                    box-shadow: 0px -1px 0 0px #dcdfe6 inset;
+                    border-radius: 0;
+                    padding: 5px 0px;
+                    background: transparent;
+                    transition: box-shadow 0.2s ease;
 
-            margin-top: 35px;
+                    &.is-focus {
+                        box-shadow: 0px -2px 0 0px #626aef inset;
+                    }
+                }
 
-            .el-input__wrapper {
-                box-shadow: 0px -1px 0 0px var(--el-input-hover-border-color) inset;
-                border-radius: 0;
-                padding: 0px;
+                &.is-error {
+                    .el-input__wrapper {
+                        box-shadow: 0px -1px 0 0px var(--el-color-danger, #f56c6c) inset;
 
-                &.is-focus {
-                    box-shadow: 0px -1px 0 0px var(--el-input-focus-border-color) inset;
+                        &.is-focus {
+                            box-shadow: 0px -2px 0 0px var(--el-color-danger, #f56c6c) inset;
+                        }
+                    }
+                }
 
+                .el-form-item__error {
+                    padding-top: 4px;
                 }
             }
 
@@ -395,19 +458,28 @@ const dosubmit = () => {
                 display: flex;
                 justify-content: center;
                 width: 100%;
+                margin-top: 8px;
 
                 .login-button {
-                    width: 90%;
-                    height: 100%;
+                    width: 100%;
+                    height: 44px;
+                    font-size: 16px;
                 }
             }
 
             .forget-password {
                 display: flex;
                 justify-content: center;
-                color: rgb(136, 136, 136);
+                color: #888;
                 width: 100%;
                 cursor: pointer;
+                font-size: 14px;
+                user-select: none;
+                transition: color 0.2s ease;
+
+                &:hover {
+                    color: #626aef;
+                }
             }
 
             .login-in-qq {
@@ -416,27 +488,47 @@ const dosubmit = () => {
                 width: 100%;
 
                 .qq-button {
-                    font-size: 20px;
+                    font-size: 24px;
+                    cursor: pointer;
+                    display: inline-block;
+                    transition: transform 0.2s ease;
+
+                    &:hover {
+                        transform: scale(1.15);
+                    }
                 }
             }
         }
-
     }
 
     .send-email-dialog {
         .input-item {
-            .el-form-item__content {
-                flex-wrap: nowrap;
-                justify-content: space-between;
+            .check-code-panel {
+                display: flex;
+                align-items: center;
+                width: 100%;
+                gap: 12px;
+
+                .el-input {
+                    flex: 1;
+                }
+
+                .checkCode {
+                    height: 34px;
+                    cursor: pointer;
+                    border-radius: 4px;
+                    flex-shrink: 0;
+                }
             }
 
             .el-input__wrapper {
-                box-shadow: 0px -1px 0 0px var(--el-input-hover-border-color) inset;
+                box-shadow: 0px -1px 0 0px #dcdfe6 inset;
                 border-radius: 0;
-                padding: 0px;
+                padding: 4px 0px;
+                background: transparent;
 
                 &.is-focus {
-                    box-shadow: 0px -1px 0 0px var(--el-input-focus-border-color) inset;
+                    box-shadow: 0px -2px 0 0px #626aef inset;
                 }
             }
         }
@@ -444,7 +536,8 @@ const dosubmit = () => {
         .send-email-code-btn {
             width: 100%;
             display: flex;
-            justify-content: end;
+            justify-content: flex-end;
+            margin-top: 10px;
         }
     }
 }

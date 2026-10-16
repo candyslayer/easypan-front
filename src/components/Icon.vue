@@ -47,7 +47,7 @@ const getImage = () => {
     if (props.cover) {
         return proxy.globalInfo.imageUrl + props.cover;
     }
-    let icon = "unknow_icon";
+    let icon = "others";
     // 根据文件名判断图标
     if (props.iconName) {
         icon = props.iconName;

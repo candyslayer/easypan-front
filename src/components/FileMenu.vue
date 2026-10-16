@@ -1,197 +1,121 @@
-<!-- filepath: /c:/Users/lengt/code/vue/easypan-front/src/views/component/FileMenu.vue -->
 <template>
-  <div class="file-menu">
-    <el-tag type="info" @click="toggleMenu" class="menu-tag" :closable="false" :disable-transitions="true">
-      <span v-if="!menuVisible">分类</span>
-      <el-icon v-else class="fold-icon">
-        <ArrowRight />
-      </el-icon>
-    </el-tag>
-    <transition-group name="menu-item">
-      <el-tag v-for="(item, idx) in categories" :key="idx" :type="getTagType(idx)" class="menu-tag menu-item"
-        :closable="false" :disable-transitions="true" v-show="visibleIndices.includes(idx)" @click="selectCategory(idx)"
-        :class="{ 
-          'is-active': activeCategory === idx
-        }" :style="{ 
-          '--rotation': `${getRotation(idx)}deg`,
-          'transform': `rotate(${getRotation(idx)}deg)`
-        }">
-        <span :class="['icon-font', item.icon]"></span>
-        <span class="tag-text">{{ item.name }}</span>
-      </el-tag>
-    </transition-group>
-
-    <div v-if="!menuVisible" class="search">
-      <ElInput placeholder="搜索文件..." clearable>
-        <template #suffix>
-          <span class="dripicons-search"></span>
-        </template>
-      </ElInput>
+  <div class="aether-category-bar">
+    <div class="category-scroll-container">
+      <div
+        v-for="item in categories"
+        :key="item.category"
+        class="category-pill"
+        :class="{ 'is-active': currentCategory === item.category }"
+        @click="switchCategory(item.category)"
+      >
+        <span class="material-symbols-outlined pill-icon">{{ item.icon }}</span>
+        <span class="pill-name">{{ item.name }}</span>
+      </div>
     </div>
-    
   </div>
-
-
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { ElTag, ElIcon,ElInput } from 'element-plus';
-import { ArrowRight } from '@element-plus/icons-vue';
+import { computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
-const menuVisible = ref(false);
-const activeCategory = ref(null);
-const visibleIndices = ref([]);
+const route = useRoute();
+const router = useRouter();
 
-// 合并标签配置
-const categories = ref([
-  { 
-    name: '视频', 
-    type: 'success',
-    icon: 'dripicons-media-play'  // 视频播放图标
-  },
-  { 
-    name: '音频', 
-    type: 'warning',
-    icon: 'dripicons-media-loop'  // 音频循环图标
-  },
-  { 
-    name: '图片', 
-    type: 'danger',
-    icon: 'dripicons-photo'  // 图片图标
-  },
-  { 
-    name: '文档', 
-    type: 'info',
-    icon: 'dripicons-document'  // 文档图标
-  },
-  { 
-    name: '其他', 
-    type: 'primary',
-    icon: 'dripicons-dots-3'  // 更多图标
-  }
-]);
+const categories = [
+  { name: '全部', category: 'all', icon: 'grid_view' },
+  { name: '视频', category: 'video', icon: 'movie' },
+  { name: '音频', category: 'music', icon: 'graphic_eq' },
+  { name: '图片', category: 'image', icon: 'image' },
+  { name: '文档', category: 'doc', icon: 'description' },
+  { name: '其他', category: 'others', icon: 'more_horiz' }
+];
 
-// 获取标签类型
-const getTagType = (index) => {
-  return categories.value[index].type;
-};
+const currentCategory = computed(() => {
+  return route.params.category || 'all';
+});
 
-// 获取旋转角度
-const getRotation = (index) => {
-  return (index % 2 === 0) ? -3 : 3; // 交替旋转±3度
-};
-
-const toggleMenu = () => {
-  if (!menuVisible.value) {
-    // 展开菜单
-    menuVisible.value = true;
-    visibleIndices.value = [];
-    categories.value.forEach((_, idx) => {
-      setTimeout(() => {
-        visibleIndices.value = [...visibleIndices.value, idx];
-      }, idx * 50);
-    });
-  } else {
-    // 收起菜单
-    const maxIdx = categories.value.length - 1;
-    categories.value.forEach((_, idx) => {
-      setTimeout(() => {
-        const indexToRemove = maxIdx - idx;
-        visibleIndices.value = visibleIndices.value.filter(i => i !== indexToRemove);
-      }, idx * 50);
-    });
-    setTimeout(() => {
-      menuVisible.value = false;
-      visibleIndices.value = [];
-    }, categories.value.length * 50);
-  }
-};
-
-const selectCategory = (index) => {
-  activeCategory.value = index;
+const switchCategory = (categoryKey) => {
+  if (currentCategory.value === categoryKey) return;
+  router.push(`/main/${categoryKey}`);
 };
 </script>
 
-<style lang="scss">
-.file-menu {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  position: relative;
-  padding: 5px;
-  border-radius: 20px;
-
+<style lang="scss" scoped>
+.aether-category-bar {
   width: 100%;
+  padding: 6px 12px 10px;
+  box-sizing: border-box;
 
-  .menu-tag {
-    margin: 5px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    border-radius: 16px;
-    padding: 0 12px;
-    display: inline-flex;  // 添加这行
-    align-items: center;   // 添加这行
-    
-    .fold-icon {
-      transform: rotate(90deg);
-      transition: transform 0.3s ease;
-    }
+  .category-scroll-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
 
-    .icon-font {
-      margin-right: 5px;
-      font-size: 14px;
-      display: inline-block;  // 添加这行
-      line-height: 1;        // 添加这行
-    }
-
-    .tag-text {
-      display: inline-block;  // 添加这行
-      line-height: 1;        // 添加这行
+    &::-webkit-scrollbar {
+      display: none;
     }
   }
 
-  .menu-item {
-    // 移除初始的 opacity: 0
-    transition: all 0.3s ease;
-    
-    // 当显示时的样式
-    &[v-show]:not([style*="display: none"]) {
-      transform: translateX(0) rotate(var(--rotation));
+  .category-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    background: #ffffff;
+    color: #434655;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    border: 1px solid #e5eeff;
+    box-shadow: 0 1px 3px rgba(11, 28, 48, 0.04);
+    transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+    flex-shrink: 0;
+
+    .pill-icon {
+      font-size: 16px;
+      margin-right: 6px;
+      line-height: 1;
+      color: #737686;
+      transition: color 0.2s;
+    }
+
+    .pill-name {
+      line-height: 1;
+      letter-spacing: -0.01em;
     }
 
     &:hover {
-      transform: translateX(0) rotate(0deg) scale(1.05);
+      background: #eff4ff;
+      color: #0b1c30;
+      border-color: #dce9ff;
+
+      .pill-icon {
+        color: #004ac6;
+      }
+    }
+
+    &:active {
+      transform: scale(0.96);
+    }
+
+    &.is-active {
+      background: #004ac6;
+      border-color: #004ac6;
+      color: #ffffff;
+      box-shadow: 0 3px 10px rgba(0, 74, 198, 0.28);
+      font-weight: 600;
+
+      .pill-icon {
+        color: #ffffff;
+      }
     }
   }
-
-  .is-active {
-    transform: translateX(0) rotate(0deg) scale(1.05) !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-
-  .search{
-    flex: 1;
-    padding: 0px 10px;
-  }
-}
-
-
-// 修改过渡动画样式
-.menu-item-enter-active,
-.menu-item-leave-active {
-  transition: all 0.3s ease;
-}
-
-.menu-item-enter-from,
-.menu-item-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
-}
-
-.menu-item-enter-to,
-.menu-item-leave-from {
-  opacity: 1;
-  transform: translateX(0);
 }
 </style>
